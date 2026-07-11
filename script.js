@@ -2,11 +2,14 @@
   "use strict";
 
   const STORAGE_KEY = "portfolio-theme";
-  const header = document.querySelector(".site-header");
   const navToggle = document.getElementById("nav-toggle");
-  const siteNav = document.getElementById("site-nav");
   const themeToggle = document.getElementById("theme-toggle");
   const yearEl = document.getElementById("year");
+  const clockEl = document.getElementById("taskbar-clock");
+  const easterEgg = document.getElementById("easter-egg");
+  const easterEggClose = document.getElementById("easter-egg-close");
+  const menubarLogo = document.querySelector(".menubar-logo");
+  let logoClickCount = 0;
 
   function getStoredTheme() {
     try {
@@ -48,34 +51,37 @@
 
   function initTheme() {
     const stored = getStoredTheme();
-    const theme = stored === "light" || stored === "dark" ? stored : getPreferredTheme();
+    const theme =
+      stored === "light" || stored === "dark" ? stored : getPreferredTheme();
     applyTheme(theme);
   }
 
   function toggleTheme() {
-    const isLight = document.documentElement.getAttribute("data-theme") === "light";
+    const isLight =
+      document.documentElement.getAttribute("data-theme") === "light";
     const next = isLight ? "dark" : "light";
     applyTheme(next);
     setStoredTheme(next);
   }
 
   function closeNav() {
-    if (!header || !navToggle) return;
-    header.classList.remove("is-open");
-    navToggle.setAttribute("aria-expanded", "false");
-    navToggle.setAttribute("aria-label", "開啟選單");
+    document.body.classList.remove("is-nav-open");
+    if (navToggle) {
+      navToggle.setAttribute("aria-expanded", "false");
+      navToggle.setAttribute("aria-label", "開啟選單");
+    }
   }
 
   function openNav() {
-    if (!header || !navToggle) return;
-    header.classList.add("is-open");
-    navToggle.setAttribute("aria-expanded", "true");
-    navToggle.setAttribute("aria-label", "關閉選單");
+    document.body.classList.add("is-nav-open");
+    if (navToggle) {
+      navToggle.setAttribute("aria-expanded", "true");
+      navToggle.setAttribute("aria-label", "關閉選單");
+    }
   }
 
   function toggleNav() {
-    if (!header || !navToggle) return;
-    if (header.classList.contains("is-open")) {
+    if (document.body.classList.contains("is-nav-open")) {
       closeNav();
     } else {
       openNav();
@@ -83,11 +89,14 @@
   }
 
   function initNavToggle() {
-    if (!navToggle || !header) return;
+    if (!navToggle) return;
     navToggle.addEventListener("click", toggleNav);
 
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") closeNav();
+      if (e.key === "Escape") {
+        closeNav();
+        hideEasterEgg();
+      }
     });
 
     window.addEventListener("resize", function () {
@@ -113,6 +122,14 @@
         }
       });
     });
+
+    document.querySelectorAll(".desktop-icon").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const target = document.querySelector(btn.dataset.target);
+        if (!target) return;
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
 
   function initReveal() {
@@ -135,7 +152,7 @@
           }
         });
       },
-      { root: null, rootMargin: "0px 0px -8% 0px", threshold: 0.1 }
+      { root: null, rootMargin: "0px 0px -8% 0px", threshold: 0.08 }
     );
 
     elements.forEach(function (el) {
@@ -149,6 +166,127 @@
     }
   }
 
+  function updateClock() {
+    if (!clockEl) return;
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    clockEl.textContent = hours + ":" + minutes;
+  }
+
+  function initClock() {
+    updateClock();
+    setInterval(updateClock, 30000);
+  }
+
+  function focusWindow(windowEl) {
+    document.querySelectorAll(".window").forEach(function (w) {
+      w.classList.remove("is-focused");
+    });
+    windowEl.classList.add("is-focused");
+  }
+
+  function initWindowFocus() {
+    const windows = document.querySelectorAll(".window[data-window]");
+    if (!windows.length) return;
+
+    windows[0].classList.add("is-focused");
+
+    windows.forEach(function (windowEl) {
+      windowEl.addEventListener("mousedown", function () {
+        focusWindow(windowEl);
+      });
+    });
+  }
+
+  function initDraggableWindows() {
+    if (window.matchMedia("(max-width: 767px)").matches) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    document.querySelectorAll(".window[data-window]").forEach(function (windowEl) {
+      windowEl.classList.add("is-draggable");
+      const handle = windowEl.querySelector("[data-drag-handle]");
+      if (!handle) return;
+
+      let startX = 0;
+      let startY = 0;
+      let posX = 0;
+      let posY = 0;
+      let dragging = false;
+
+      function onPointerDown(e) {
+        if (e.button !== 0) return;
+        dragging = true;
+        windowEl.classList.add("is-dragging");
+        focusWindow(windowEl);
+        startX = e.clientX;
+        startY = e.clientY;
+        windowEl.style.position = "relative";
+        windowEl.style.zIndex = "10";
+        handle.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      }
+
+      function onPointerMove(e) {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        windowEl.style.transform =
+          "translate(" + (posX + dx) + "px, " + (posY + dy) + "px)";
+      }
+
+      function onPointerUp(e) {
+        if (!dragging) return;
+        dragging = false;
+        posX += e.clientX - startX;
+        posY += e.clientY - startY;
+        windowEl.classList.remove("is-dragging");
+        windowEl.style.transform =
+          "translate(" + posX + "px, " + posY + "px)";
+        handle.releasePointerCapture(e.pointerId);
+      }
+
+      handle.addEventListener("pointerdown", onPointerDown);
+      handle.addEventListener("pointermove", onPointerMove);
+      handle.addEventListener("pointerup", onPointerUp);
+      handle.addEventListener("pointercancel", onPointerUp);
+    });
+  }
+
+  function showEasterEgg() {
+    if (!easterEgg) return;
+    easterEgg.hidden = false;
+    focusWindow(easterEgg);
+  }
+
+  function hideEasterEgg() {
+    if (!easterEgg) return;
+    easterEgg.hidden = true;
+  }
+
+  function initEasterEgg() {
+    if (menubarLogo) {
+      menubarLogo.addEventListener("click", function (e) {
+        logoClickCount += 1;
+        if (logoClickCount >= 5) {
+          e.preventDefault();
+          showEasterEgg();
+          logoClickCount = 0;
+        }
+      });
+    }
+
+    if (easterEggClose) {
+      easterEggClose.addEventListener("click", hideEasterEgg);
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "?" && e.shiftKey) {
+        showEasterEgg();
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initTheme();
     if (themeToggle) {
@@ -158,5 +296,9 @@
     initSmoothScroll();
     initReveal();
     initYear();
+    initClock();
+    initWindowFocus();
+    initDraggableWindows();
+    initEasterEgg();
   });
 })();
